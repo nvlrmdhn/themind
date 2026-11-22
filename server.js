@@ -7,6 +7,11 @@ const { resolveCardPlay, countCards } = require("./lib/game-engine");
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
+const allowedOrigins = new Set([
+  "https://themind-two.vercel.app",
+  ...(process.env.FRONTEND_ORIGIN ? [process.env.FRONTEND_ORIGIN] : []),
+  ...(dev ? [`http://localhost:${port}`, `http://127.0.0.1:${port}`] : []),
+]);
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
@@ -129,7 +134,15 @@ function retryLevel(io, room) {
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => handle(req, res));
-  const io = new Server(httpServer, { cors: { origin: true, credentials: true } });
+  const io = new Server(httpServer, {
+    cors: {
+      origin(origin, callback) {
+        if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+        callback(new Error(`Origin ${origin} is not allowed by Socket.IO CORS.`));
+      },
+      credentials: true,
+    },
+  });
 
   io.on("connection", socket => {
     socket.on("room:create", ({ name, avatar }, callback) => {
